@@ -3,11 +3,12 @@
 require "curb"
 require "json"
 require "oga"
+require "parallel"
 
 def title(body)
   doc = Oga.parse_html(body)
   doc.at_css("title").text
-rescue ArgumentError, LL::ParserError => _e
+rescue ArgumentError, LL::ParserError, NoMethodError => _e
   nil
 end
 
@@ -35,11 +36,22 @@ def check(ip)
   end
 end
 
-# Usage: bundle exec ruby vhost_detour/detour.rb 1.1.1.1 8.8.8.8 ...
+def load_ipv4s(arguments)
+  if arguments.length == 1
+    argument = arguments.first
+    return File.readlines(argument).map(&:chomp) if File.exist?(argument)
+  end
+  arguments
+end
 
-ipv4s = ARGV
-results = ipv4s.map do |ip|
+# Usage:
+# bundle exec ruby vhost_detour/detour.rb 1.1.1.1 8.8.8.8 ...
+# or
+# bundle exec ruby vhost_detour/detour.rb ip.txt
+
+ipv4s = load_ipv4s(ARGV)
+results = Parallel.map(ipv4s) do |ip|
   check ip
-end.compact
+end.compact.uniq
 
 puts JSON.pretty_generate(results)
